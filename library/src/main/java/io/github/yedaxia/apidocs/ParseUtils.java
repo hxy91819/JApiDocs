@@ -174,6 +174,8 @@ public class ParseUtils {
             return JavaParser.parse(javaFile);
         }catch (FileNotFoundException e){
             throw new RuntimeException("java file not exits , file path : " + javaFile.getAbsolutePath());
+        }catch (Exception e){
+            throw new RuntimeException("parser error , file path : " + javaFile.getAbsolutePath());
         }
     }
 
@@ -256,6 +258,11 @@ public class ParseUtils {
                         //内部类字段也会读取到，这里特殊处理
                         ClassOrInterfaceDeclaration cClDeclaration = (ClassOrInterfaceDeclaration)fd.getParentNode().get();
                         if(!resultClassName.endsWith(cClDeclaration.getNameAsString())){
+                            return;
+                        }
+
+                        //忽略字段
+                        if(fd.getAnnotationByName("Ignore").isPresent()){
                             return;
                         }
 

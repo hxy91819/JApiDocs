@@ -2,12 +2,10 @@ package io.github.yedaxia.apidocs.parser;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Modifier;
+import com.github.javaparser.ast.PackageDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.expr.ClassExpr;
-import com.github.javaparser.ast.expr.MemberValuePair;
-import com.github.javaparser.ast.expr.NormalAnnotationExpr;
-import com.github.javaparser.ast.expr.SingleMemberAnnotationExpr;
+import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.javadoc.JavadocBlockTag;
 import io.github.yedaxia.apidocs.ParseUtils;
 import io.github.yedaxia.apidocs.Utils;
@@ -50,6 +48,11 @@ public abstract class AbsControllerParser {
     }
 
     private void parseClassDoc(ClassOrInterfaceDeclaration c){
+
+        c.getParentNode().get().findFirst(PackageDeclaration.class).ifPresent(pd->{
+            controllerNode.setPackageName(pd.getNameAsString());
+        });
+
         c.getJavadoc().ifPresent( d -> {
             String description = d.getDescription().toText();
             controllerNode.setDescription(Utils.isNotEmpty(description)? description: c.getNameAsString());
@@ -66,7 +69,6 @@ public abstract class AbsControllerParser {
         if(controllerNode.getDescription() == null){
             controllerNode.setDescription(c.getNameAsString());
         }
-
     }
 
     private void parseMethodDocs(ClassOrInterfaceDeclaration c){
@@ -99,20 +101,23 @@ public abstract class AbsControllerParser {
                             }
                         });
 
-                        afterHandleMethod(requestNode, m);
-
                         com.github.javaparser.ast.type.Type resultClassType = null;
                         if(an instanceof SingleMemberAnnotationExpr){
                             resultClassType = ((ClassExpr) ((SingleMemberAnnotationExpr) an).getMemberValue()).getType();
                         }else if(an instanceof NormalAnnotationExpr){
-                            Optional<MemberValuePair> opPair = ((NormalAnnotationExpr)an)
-                                    .getPairs().stream()
-                                    .filter(rs -> rs.getNameAsString().equals("result"))
-                                    .findFirst();
-                            if(opPair.isPresent()){
-                                resultClassType = ((ClassExpr) opPair.get().getValue()).getType();
+                            for(MemberValuePair pair : ((NormalAnnotationExpr)an).getPairs()){
+                                final String pairName = pair.getNameAsString();
+                                if("result".equals(pairName) || "value".equals(pairName)){
+                                    resultClassType = ((ClassExpr) pair.getValue()).getType();
+                                }else if(pairName.equals("url")){
+                                    requestNode.setUrl(((StringLiteralExpr) pair.getValue()).getValue());
+                                }else if(pairName.equals("method")){
+                                    requestNode.addMethod(((StringLiteralExpr) pair.getValue()).getValue());
+                                }
                             }
                         }
+
+                        afterHandleMethod(requestNode, m);
 
                         if(resultClassType == null){
                             if(m.getType() == null){
